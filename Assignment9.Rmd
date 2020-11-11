@@ -1,0 +1,212 @@
+---
+title: "<center> Assignment9 <center>"
+subtitle: "<center> Monte Carlo Integration <center> "
+author: "<center> Zihan Qi <center>"
+date: "<center> 11/10/2020 <center>"
+output: 
+  pdf_document: default
+  html_document: 
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Question 7.5.1
+
+Suppose $X$ has the following probability density function $f(x) = \frac{1}{5\sqrt{2\pi}}x^2 e^{-\frac{(x-2)^2}{2}}, -\infty < x < \infty$
+
+Consider using the importance sampling method to estimate $E(X^2)$.
+
+## a) Implement the important sampling method, with $g(x)$ being the standard normal density. Report your estimates using 1000, 10000 and 50000 samples. Also estimate the variances of the estimates.
+
+From what we learned in class, we got the following code lines.
+```{r}
+isAppr <- function(n, h, df, dg, rg, ...) {
+  x <- rg(n, ...)
+  mean( h(x) * df(x) / dg(x, ...) )
+}
+
+h <- function(x) x^2
+df <- function(x) 1/(5 * sqrt(2*pi)) * (x^2) * exp(-(x-2)^2 / 2)
+
+mySummary <- function(nrep, n, h, df, dg, rg) {
+    sim <- replicate(nrep, isAppr(n, h, df, dg, rg))
+    c(mean = mean(sim), sd = sd(sim))
+}
+
+rg <- function(n) rnorm(n)
+dg <- function(x) dnorm(x)
+
+mySummary(100, 1000, h, df, dg, rg)
+mySummary(100, 10000, h, df, dg, rg)
+mySummary(100, 50000, h, df, dg, rg)
+```
+
+## b) Design a better importance sampling method to estimate $E(X^2)$ using a different $g(x)$. Justify your choice of $g(x)$.
+
+From what we learned from class, we can see that for $Var(\hat\mu) = 0$, we should have $g(x) \propto |h(x)|f(x) = |H(x)|$. However, the result would be irrelevent since that's exactly we tried to find. Nonetheless, we can see that the more likely $g(x)$ would be like $h(x)*f(x)$, the less variance and more accurate estimate we will get. Therefore, for this question, $g(x)$ is a normal distribution with a mean of 2 other than centered normal distribution would definitely be a better solution since $f(x) = \frac{1}{5\sqrt{2\pi}}x^2 e^{-\frac{(x-2)^2}{2}}$
+
+## c) Implement your method and estimate $E(X^2)$ using using 1000, 10000 and 50000 samples. Also estimate the variances of the importance sampling estimates.
+ 
+```{r}
+rg1 <- function(n) rnorm(n, mean = 2)
+dg1 <- function(x) dnorm(x, mean = 2)
+
+mySummary(100, 1000, h, df, dg1, rg1)
+mySummary(100, 10000, h, df, dg1, rg1)
+mySummary(100, 50000, h, df, dg1, rg1)
+
+```
+
+## d) Compare the two results from the two methods and comment.
+
+From the results, we can see that the variance of the second try is significantly less than the first try. The result is more accurate as well for the second method. Also, if we increase the sample size more, the result is also more accurate and has less variance. Also, we can get other better results by setting $g(x)$ resembles $h(x)f(x)$ more. As the $g(x)$ we chose trends more and more to the accurate mean, it will coincide when we choose $g(x) = h(x)f(x)$.
+
+
+
+
+# Question 7.5.2
+
+Consider a geometric Brownian motion
+\begin{align*}
+  \frac{dS(t)}{S(t)} = rdt + \sigma dW(t).
+\end{align*}
+Let $P_A = e^{-rT}(S_A-K)_+$, $P_E = e^{-rT}[S(T)-K]_+$, and $P_G = e^{-rT}[S_G-K]_+$, where
+\begin{align*}
+  S_A = \frac{1}{n} \sum_{i=1}^n S\left(\frac{iT}{n}\right),
+  \quad
+  S_G = \left[\prod_{i=1}^n S\left(\frac{iT}{n}\right)\right]^{1/n}.
+\end{align*}
+
+In all the questions below, $S(0)=1$, $r=0.05$, and $n=12$.
+
+## a) Write down and implement an algorithm to sample the path of $S(t)$.
+
+Since we got the general Geometric Brownian motion with equation $dS(t) = rS(t)dt + \sigma S(t)dW(t)$, from the solution of GBM using Ito, we have $S(T) = S(t)*e^{(\mu - \frac{1}{2} \sigma^2)(T-t) + (\sigma  \sqrt{T-t})z}$, which in this specific question, $S(t) = S(0)*e^{(r - \frac{1}{2} \sigma^2)t + (\sigma  \sqrt{t})z}$. Therefore, to sample the path of $S(t)$, we can divide the time into several steps and we can sample each time step of $S(t)$ and therefore to sample the path of $S(t)$
+
+## b) Set $\sigma=0.5$ and $T=1$. For each of the values of $K \in \{1.1, 1.2, 1.3, 1.4, 1.5\}$, simulate 5000 sample paths of $S(t)$ to get MC estimates of the correlation coefficients between $P_A$ and $S(T)$, between $P_A$ and $P_E$, and between $P_A$ and $P_G$.  How do the correlation coefficients change as $K$ increases?
+
+As learned in class, the solution is given below and 5 correlation matrix and the mean of the three variable are calculated.
+```{r}
+rBM <- function(n, tgrid, sigma) {
+    tt <- c(0, tgrid)
+    dt <- diff(tt)
+    nt <- length(tgrid)
+    dw <- matrix(rnorm(n * nt, sd = sigma * sqrt(dt)), n, nt, byrow = TRUE)
+    t(apply(dw, 1, cumsum))
+}
+
+callValLognorm <- function(S0, K, mu, sigma) {
+    d <- (log(S0 / K) + mu + sigma^2) / sigma
+    S0 * exp(mu + 0.5 * sigma^2) * pnorm(d) - K * pnorm(d - sigma)
+}
+
+optValueAppr <- function(n, r, sigma, S0, K, tgrid) {
+    wt <- rBM(n, tgrid, sigma)
+    nt <- length(tgrid)
+    TT <- tgrid[nt]
+    St <- S0 * exp((r - sigma^2 / 2) * matrix(tgrid, n, nt, byrow = TRUE) + wt)
+    pAri <- pmax(rowMeans(St) - K, 0)
+    ST <- St[, nt]
+    pGeo <- pmax(exp(rowMeans(log(St))) - K, 0)
+    sim <- data.frame(pAri, ST, pGeo)
+    sim
+}
+
+r <- 0.05; sigma <- 0.5; S0 <- 1; 
+K1 <- 1.1; K2 <- 1.2; K3 <- 1.3; K4 <- 1.4; K5 <- 1.5
+tgrid <-  seq(0, 1, length = 12)[-1]
+a1 <- optValueAppr(5000, r, sigma, S0, K1, tgrid)
+a2 <- optValueAppr(5000, r, sigma, S0, K2, tgrid)
+a3 <- optValueAppr(5000, r, sigma, S0, K3, tgrid)
+a4 <- optValueAppr(5000, r, sigma, S0, K4, tgrid)
+a5 <- optValueAppr(5000, r, sigma, S0, K5, tgrid)
+cor(a1)
+cor(a2)
+cor(a3)
+cor(a4)
+cor(a5)
+c(mean(a1$pAri), mean(a1$ST), mean(a1$pGeo))
+
+```
+
+We can see that as K increases, the correlation decreases for all three correlations. (The correlation between pAri and pGeo is always high, around 0.99)
+
+
+## c) Set $T=1$ and $K=1.5$.  For each of the values of $\sigma \in \{0.2, 0.3, 0.4, 0.5\}$, simulate 5000 sample paths of $S(t)$ to get MC estimates of the correlation coefficients.  How do the correlation coefficients change as $\sigma$ increases?
+
+Now we just change the variables of sigmas, we have:
+```{r}
+sigma1 <- 0.2; sigma2 <- 0.3; sigma3 <- 0.4; sigma4 <- 0.5
+b1 <- optValueAppr(5000, r, sigma1, S0, K5, tgrid)
+b2 <- optValueAppr(5000, r, sigma2, S0, K5, tgrid)
+b3 <- optValueAppr(5000, r, sigma3, S0, K5, tgrid)
+b4 <- optValueAppr(5000, r, sigma4, S0, K5, tgrid)
+
+cor(b1)
+cor(b2)
+cor(b3)
+cor(b4)
+c(mean(b1$pAri), mean(b1$ST), mean(b1$pGeo))
+```
+
+From the result, we can see that as sigma increases, the correlation increases for all three correlations. (The correlation between pAri and pGeo is always high, around 0.99)
+
+## d) Set $\sigma=0.5$ and $K=1.5$.  For each of the values of $T \in \{0.4, 0.7, 1, 1.3, 1.6\}$, use 5000 sample paths of $S(t)$ to get MC estimates of the correlation coefficients.  How do the correlation coefficients change as $T$ increases?
+
+Still, we just need to change the Tgrids of the unput:
+```{r}
+tgrid1 <-  seq(0, 0.4, length = 12)[-1]
+tgrid2 <-  seq(0, 0.7, length = 12)[-1]
+tgrid3 <-  seq(0, 1.0, length = 12)[-1]
+tgrid4 <-  seq(0, 1.3, length = 12)[-1]
+tgrid5 <-  seq(0, 1.6, length = 12)[-1]
+
+c1 <- optValueAppr(5000, r, sigma, S0, K5, tgrid1)
+c2 <- optValueAppr(5000, r, sigma, S0, K5, tgrid2)
+c3 <- optValueAppr(5000, r, sigma, S0, K5, tgrid3)
+c4 <- optValueAppr(5000, r, sigma, S0, K5, tgrid4)
+c5 <- optValueAppr(5000, r, sigma, S0, K5, tgrid5)
+
+cor(c1)
+cor(c2)
+cor(c3)
+cor(c4)
+cor(c5)
+c(mean(c1$pAri), mean(c1$ST), mean(c1$pGeo))
+```
+
+From the result, we can see that as T increases, the correlation increases for all three correlations. (The correlation between pAri and pGeo is always high, around 0.99)
+
+## e) Set $\sigma=0.4$, $T=1$ and $K=1.5$.  Use $P_G$ as a control variate to develop a control variate MC estimator for $E(P_A)$. Compare its SD with the SD of the MC estimator for $E(P_A)$ that has no control variate.
+
+Now we need to consider $P_G$ as a control variate to develop a control variate MC estimator for $E(P_A)$. So we have the following:
+```{r}
+optValueAppr1 <- function(n, r, sigma, S0, K, tgrid) {
+    wt <- rBM(n, tgrid, sigma)
+    nt <- length(tgrid)
+    TT <- tgrid[nt]
+    St <- S0 * exp((r - sigma^2 / 2) * matrix(tgrid, n, nt, byrow = TRUE) + wt)
+    pAri <- pmax(rowMeans(St) - K, 0)
+    vAri <- mean(pAri) 
+
+    pGeo <- pmax(exp(rowMeans(log(St))) - K, 0)
+    tbar <- mean(tgrid)
+    sBar2 <- sigma^2 / nt^2 / tbar * sum( (2 * seq(nt) - 1) * rev(tgrid) )
+    pGeoTrue <- callValLognorm(S0, K, (r - 0.5 * sigma^2) * tbar, sqrt(sBar2 * tbar))
+    vGeo <- vAri - cov(pGeo, pAri) / var(pGeo) * (mean(pGeo) - pGeoTrue)
+    
+    
+    return (c(vAri * exp(-r * TT), vGeo * exp(-r * TT)))
+}
+
+sim1 <- replicate(100, optValueAppr1(5000, r, sigma3, S0, K5, tgrid))
+apply(sim1, 1, mean)
+apply(sim1, 1, sd)
+
+```
+
+From the result, we can see that the mean of the control variate MC is accurate with the original MC. The sd is smaller than the original MC.
